@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Asignación óptima de dispositivos entre canales Wi-Fi</title>
+<style>
+:root{
+  --c1:#E3F6F5; --c2:#A7E0DB; --c3:#5FB0C9; --c4:#3E6D9C; --c5:#2A2F63;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;font-family:"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;color:var(--c5);-webkit-print-color-adjust:exact;print-color-adjust:exact}
+body{background:var(--c5);overflow:hidden}
+
+/* ---------- Escenario y carrusel ---------- */
+.viewport{position:fixed;inset:0;background:var(--c5);overflow:hidden}
+.stage{position:absolute;left:50%;top:50%;width:1280px;height:720px;overflow:hidden;transform-origin:center center;background:var(--c1);box-shadow:0 10px 50px rgba(0,0,0,.35)}
+.track{display:flex;height:100%;transition:transform .75s cubic-bezier(.65,.05,.25,1)}
+.slide{position:relative;flex:0 0 1280px;width:1280px;height:720px;padding:44px 64px 74px;overflow:hidden;
+  background:linear-gradient(135deg,var(--c1) 0%,#F4FCFB 100%)}
+.slide::before{content:"";position:absolute;right:-120px;top:-120px;width:340px;height:340px;border-radius:50%;background:var(--c2);opacity:.45}
+.slide::after{content:"";position:absolute;left:-90px;bottom:-110px;width:260px;height:260px;border-radius:50%;background:var(--c3);opacity:.18}
+.slide>*{position:relative;z-index:1}
+
+h1{font-size:60px;line-height:1.1;font-weight:800}
+h2{font-size:38px;line-height:1.15;font-weight:800;color:var(--c5);padding-bottom:12px;margin-bottom:22px;position:relative}
+h2::after{content:"";position:absolute;left:0;bottom:0;width:120px;height:6px;border-radius:3px;background:linear-gradient(90deg,var(--c4),var(--c3))}
+h3{font-size:24px;font-weight:700;color:var(--c4);margin-bottom:8px}
+p,li{font-size:21px;line-height:1.45}
+.lead{font-size:24px;line-height:1.45}
+b,strong{color:var(--c5)}
+.muted{color:var(--c4)}
+
+/* ---------- Componentes ---------- */
+.card{background:rgba(255,255,255,.82);border:2px solid var(--c2);border-radius:18px;padding:20px 24px;box-shadow:0 4px 14px rgba(42,47,99,.08)}
+.card.dark{background:var(--c5);color:var(--c1);border-color:var(--c5)}
+.card.dark h3{color:var(--c2)}
+.card.dark b{color:#fff}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+.grid5{display:grid;grid-template-columns:repeat(5,1fr);gap:14px}
+.callout{background:var(--c2);border-left:8px solid var(--c4);border-radius:12px;padding:14px 20px;font-size:21px;line-height:1.4}
+.callout .t{display:block;font-weight:800;color:var(--c4);font-size:15px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:3px}
+.formula{background:var(--c5);color:var(--c1);border-radius:14px;padding:14px 22px;font-family:"Cambria Math","Consolas","Courier New",monospace;font-size:28px;text-align:center}
+.formula small{display:block;font-family:"Segoe UI",Arial,sans-serif;font-size:16px;color:var(--c2);margin-top:4px}
+.pill{display:inline-block;background:var(--c4);color:#fff;border-radius:20px;padding:4px 16px;font-size:17px;font-weight:700}
+.pill.alt{background:var(--c3)}
+.num-circle{width:46px;height:46px;border-radius:50%;background:var(--c4);color:#fff;font-weight:800;font-size:24px;display:flex;align-items:center;justify-content:center;margin-bottom:10px}
+.ok{color:#2e7d5b;font-weight:700}
+
+table{width:100%;border-collapse:collapse;border-radius:14px;overflow:hidden;font-size:19px}
+th{background:var(--c4);color:#fff;padding:11px 14px;text-align:left;font-weight:700}
+td{padding:10px 14px;background:rgba(255,255,255,.85);border-bottom:2px solid var(--c1)}
+tr:nth-child(even) td{background:rgba(167,224,219,.45)}
+tr.best td{background:var(--c5);color:var(--c1);font-weight:700}
+tr.best td b{color:#fff}
+td.c,th.c{text-align:center}
+.mono{font-family:"Cambria Math","Consolas",monospace}
+
+.bar{height:20px;background:rgba(167,224,219,.7);border-radius:10px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--c4);border-radius:10px}
+tr.best .bar{background:var(--c4)} tr.best .bar i{background:var(--c2)}
+.use{margin-bottom:14px}
+.use .lab{display:flex;justify-content:space-between;font-size:19px;margin-bottom:5px}
+.use .bar{height:24px}
+.big{font-size:64px;font-weight:800;line-height:1;color:var(--c4)}
+.big small{font-size:22px;font-weight:600;color:var(--c5)}
+.legend div{display:flex;align-items:center;gap:12px;font-size:19px;margin-bottom:11px;line-height:1.3}
+.legend svg{flex:0 0 46px}
+.chartbox{background:#fff;border:2px solid var(--c2);border-radius:18px;padding:8px;box-shadow:0 4px 14px rgba(42,47,99,.08)}
+.chartbox svg{display:block;width:100%;height:auto}
+
+/* ---------- Portada ---------- */
+.cover{background:linear-gradient(135deg,var(--c5) 0%,var(--c4) 100%);color:var(--c1);padding-top:56px}
+.cover::before{background:var(--c3);opacity:.35;width:520px;height:520px;right:-150px;top:-170px}
+.cover::after{background:var(--c2);opacity:.2;width:420px;height:420px;left:-120px;bottom:-190px}
+.cover h1{color:#fff;margin:20px 0 12px;max-width:1120px;font-size:54px}
+.cover .sub{font-size:28px;color:var(--c2);max-width:900px;margin-bottom:34px}
+.cover .tag{display:inline-block;background:var(--c3);color:var(--c5);font-weight:800;letter-spacing:.1em;text-transform:uppercase;padding:6px 18px;border-radius:20px;font-size:16px}
+.cover .info{background:rgba(227,246,245,.12);border:2px solid rgba(167,224,219,.5);border-radius:18px;padding:20px 28px;max-width:860px}
+.cover .info p{font-size:22px;color:var(--c1);line-height:1.55}
+.cover .info b{color:#fff}
+.cover .hint{margin-top:22px;font-size:17px;color:var(--c2)}
+
+/* ---------- Pie con nombre (visible siempre) ---------- */
+.foot{position:absolute!important;left:0;right:0;bottom:0;height:46px;background:var(--c5);color:var(--c1);display:flex;align-items:center;justify-content:space-between;padding:0 64px;font-size:16px;z-index:5}
+.foot .who{font-weight:700;color:#fff}
+.foot .who::before{content:"";display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--c3);margin-right:10px}
+.foot .uni{color:var(--c2)}
+.foot .n{font-weight:700;background:var(--c4);padding:3px 14px;border-radius:14px;color:#fff}
+
+/* ---------- Controles (no se imprimen) ---------- */
+.ui{position:fixed;z-index:50}
+#pdfBtn{top:14px;right:16px;background:var(--c3);color:var(--c5);border:none;border-radius:26px;padding:11px 22px;font-size:16px;font-weight:800;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.3);transition:.2s}
+#pdfBtn:hover{background:var(--c2);transform:translateY(-2px)}
+.arrow{top:50%;transform:translateY(-50%);width:46px;height:46px;border-radius:50%;border:none;background:rgba(42,47,99,.82);color:var(--c1);font-size:22px;cursor:pointer;transition:.2s}
+.arrow:hover{background:var(--c4)}
+.arrow:disabled{opacity:.25;cursor:default}
+#prev{left:12px} #next{right:12px}
+#dots{bottom:58px;left:50%;transform:translateX(-50%);display:flex;gap:7px}
+#dots button{width:10px;height:10px;border-radius:50%;border:none;background:var(--c2);opacity:.55;cursor:pointer;padding:0}
+#dots button.on{background:var(--c4);opacity:1;transform:scale(1.4)}
+#toast{top:64px;right:16px;max-width:360px;background:var(--c5);color:var(--c1);padding:14px 18px;border-radius:14px;font-size:15px;line-height:1.4;opacity:0;pointer-events:none;transition:.3s;border:2px solid var(--c3)}
+#toast.show{opacity:1}
+
+/* ---------- Animación de entrada ---------- */
+@keyframes rise{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
+.slide .anim{opacity:0}
+.slide.active .anim{animation:rise .6s ease both;animation-delay:calc(var(--d,0) * .09s + .3s)}
+
+/* ---------- Exportar a PDF ---------- */
+@page{size:1280px 720px;margin:0}
+@media print{
+  html,body{width:1280px;height:auto;overflow:visible;background:#fff}
+  .viewport{position:static;inset:auto;overflow:visible;background:none}
+  .stage{position:static;transform:none!important;width:1280px;height:auto;overflow:visible;box-shadow:none}
+  .track{display:block;width:1280px;transform:none!important;transition:none!important}
+  .slide{width:1280px;height:720px;flex:none;break-after:page;page-break-after:always;break-inside:avoid;overflow:hidden}
+  .slide:last-child{break-after:auto;page-break-after:auto}
+  .ui{display:none!important}
+  .slide .anim{opacity:1!important;animation:none!important}
+}
+</style>
+</head>
+<body>
+<div class="viewport" id="viewport">
+<div class="stage" id="stage">
+<div class="track" id="track">
+
+<!-- 1. PORTADA -->
+<section class="slide cover">
+  <span class="tag anim" style="--d:0">Investigación de Operaciones · Programación Lineal</span>
+  <h1 class="anim" style="--d:1">Asignación óptima de dispositivos entre canales Wi&#8209;Fi</h1>
+  <p class="sub anim" style="--d:2">¿Cuál es el mejor canal según la hora del día? Un problema de programación lineal en una red LAN doméstica.</p>
+  <div class="info anim" style="--d:3">
+    <p><b>Expositor:</b> Miguel Roberth Díaz Zambrano</p>
+    <p><b>Universidad:</b> Universidad Técnica Estatal de Quevedo</p>
+    <p><b>Facultad:</b> Ciencias de la Computación</p>
+    <p><b>Carrera:</b> Telemática · Séptimo semestre</p>
+  </div>
+  <p class="hint anim" style="--d:4">Navega con las teclas ← y → · También puedes usar las flechas o deslizar en pantallas táctiles</p>
+</section>
+
+<!-- 2. EL PROBLEMA EN DOS LENGUAJES -->
+<section class="slide">
+  <h2 class="anim" style="--d:0">¿Qué problema vamos a resolver?</h2>
+  <div class="grid2">
+    <div class="card anim" style="--d:1">
+      <h3>🚗 En palabras simples</h3>
+      <p>Imagina que el Wi-Fi de tu casa es una <b>autopista con varios carriles</b> (los canales). Tus vecinos ya ocupan una parte de cada carril. Tus dispositivos (celular, laptop, TV) son los <b>autos</b>.</p>
+      <p style="margin-top:10px">La pregunta es: <b>¿cuántos autos pones en cada carril</b> para que pase la mayor cantidad de tráfico posible?</p>
+    </div>
+    <div class="card dark anim" style="--d:2">
+      <h3>📡 En términos técnicos</h3>
+      <p>Un router doméstico en una <b>LAN</b> opera en la banda de <b>2.4 GHz</b>. Los canales <b>1, 6 y 11</b> no se solapan entre sí, pero comparten el espectro con las redes vecinas (interferencia co-canal).</p>
+      <p style="margin-top:10px">La ocupación de cada canal cambia durante el día, por lo que <b>el mejor canal también cambia</b>.</p>
+    </div>
+  </div>
+  <div class="callout anim" style="--d:3;margin-top:24px"><span class="t">Objetivo</span>Decidir cuántos dispositivos conectar a cada canal, en cada franja horaria, para <b>maximizar el rendimiento total</b> de la red.</div>
+  <div class="callout anim" style="--d:4;margin-top:14px;background:var(--c1);border:2px solid var(--c2);border-left:8px solid var(--c3)"><span class="t">Herramienta</span>Programación lineal resuelta con el <b>método gráfico</b> (dos variables de decisión).</div>
+</section>
+
+<!-- 3. GLOSARIO -->
+<section class="slide">
+  <h2 class="anim" style="--d:0">Conceptos clave para entender el ejercicio</h2>
+  <div class="grid3">
+    <div class="card anim" style="--d:1"><h3>📶 Router</h3><p>Equipo que conecta los dispositivos de la casa entre sí y con Internet.</p></div>
+    <div class="card anim" style="--d:2"><h3>🏠 LAN</h3><p>Red de área local: la red privada de la casa donde viven tus dispositivos.</p></div>
+    <div class="card anim" style="--d:3"><h3>📻 Canal Wi-Fi</h3><p>“Frecuencia” por la que viaja la señal, como una emisora de radio. En 2.4 GHz usamos los canales 1, 6 y 11.</p></div>
+    <div class="card anim" style="--d:4"><h3>⏱️ Airtime</h3><p>Porcentaje del tiempo en que el canal está libre para transmitir. Si está ocupado, los dispositivos deben esperar.</p></div>
+    <div class="card anim" style="--d:5"><h3>🚀 Throughput</h3><p>Velocidad real de datos que logra un dispositivo, medida en Mbps (megabits por segundo).</p></div>
+    <div class="card dark anim" style="--d:6"><h3>🧮 Programación lineal</h3><p>Técnica matemática para tomar la <b>mejor decisión</b> cuando los recursos son limitados.</p></div>
+  </div>
+</section>
+
+<!-- 4. ENUNCIADO -->
+<section class="slide">
+  <h2 class="anim" style="--d:0">Enunciado del ejercicio</h2>
+  <div class="card anim" style="--d:1">
+    <p>Un estudiante de Telemática administra el <b>router doméstico de su LAN</b> (2.4 GHz). Sus vecinos usan los mismos canales, así que el <b>airtime libre</b> de cada canal varía durante el día. Considera solo dos canales:</p>
+    <ul style="margin:10px 0 10px 28px">
+      <li><b>Canal 1:</b> más ocupado en la noche.</li>
+      <li><b>Canal 11:</b> más libre en la noche.</li>
+    </ul>
+    <p>Cada dispositivo consume airtime y rinde un throughput distinto según la congestión del canal. El router soporta como máximo <b>15 clientes simultáneos</b>.</p>
+  </div>
+  <div class="callout anim" style="--d:2;margin-top:22px"><span class="t">Pregunta</span>¿Cuántos dispositivos conviene asignar a cada canal para <b>maximizar el throughput total</b>? ¿Cuál es el mejor canal en la noche y cuál en la mañana?</div>
+  <div style="display:flex;gap:18px;margin-top:22px;--d:3" class="anim">
+    <span class="pill">🌙 Franja 1: Noche (19:00 – 23:00)</span>
+    <span class="pill alt">☀️ Franja 2: Mañana (07:00 – 12:00)</span>
+  </div>
+</section>
+
+<!-- 5. DATOS NOCHE -->
+<section class="slide">
+  <h2 class="anim" style="--d:0">Datos de la franja de noche (19:00 – 23:00)</h2>
+  <div class="anim" style="--d:1">
+  <table>
+    <tr><th>Recurso / restricción</th><th class="c">Por dispositivo en Canal 1</th><th class="c">Por dispositivo en Canal 11</th><th class="c">Disponibilidad</th></tr>
+    <tr><td>Airtime Canal 1 (%)</td><td class="c">5</td><td class="c">–</td><td class="c">40</td></tr>
+    <tr><td>Airtime Canal 11 (%)</td><td class="c">–</td><td class="c">4</td><td class="c">48</td></tr>
+    <tr><td>Clientes del router</td><td class="c">1</td><td class="c">1</td><td class="c">15</td></tr>
+    <tr class="best"><td><b>Throughput efectivo (Mbps)</b></td><td class="c"><b>4</b></td><td class="c"><b>7</b></td><td class="c">—</td></tr>
+  </table>
+  </div>
+  <div class="grid2" style="margin-top:24px">
+    <div class="callout anim" style="--d:2"><span class="t">Cómo leer la tabla</span>Cada dispositivo en el Canal 1 gasta <b>5 %</b> del airtime y entrega <b>4 Mbps</b>. En el Canal 11 gasta <b>4 %</b> y entrega <b>7 Mbps</b>.</div>
+    <div class="callout anim" style="--d:3"><span class="t">Qué significa la disponibilidad</span>De noche el Canal 1 solo tiene <b>40 %</b> libre (vecinos ocupados) y el Canal 11 tiene <b>48 %</b>.</div>
+  </div>
+  <p class="muted anim" style="--d:4;margin-top:16px;font-size:18px">* Datos didácticos (supuestos) para ilustrar el método. Pueden reemplazarse por mediciones reales.</p>
+</section>
+
+<!-- 6. MODELO -->
+<section class="slide">
+  <h2 class="anim" style="--d:0">Paso 1: construir el modelo matemático</h2>
+  <div class="grid2">
+    <div class="card anim" style="--d:1">
+      <h3>Variables de decisión</h3>
+      <p style="margin-bottom:10px">Son las cantidades que podemos decidir:</p>
+      <p><span class="pill">x</span>&nbsp; Dispositivos asignados al <b>Canal 1</b></p>
+      <p style="margin-top:10px"><span class="pill alt">y</span>&nbsp; Dispositivos asignados al <b>Canal 11</b></p>
+    </div>
+    <div class="card anim" style="--d:2">
+      <h3>Función objetivo</h3>
+      <p style="margin-bottom:12px">Lo que queremos <b>maximizar</b>: el throughput total.</p>
+      <div class="formula">Max Z = 4x + 7y<small>Z en Mbps</small></div>
+    </div>
+  </div>
+  <div class="callout anim" style="--d:3;margin-top:24px"><span class="t">En palabras simples</span>Cada dispositivo en el Canal 1 aporta <b>4 Mbps</b> y cada uno en el Canal 11 aporta <b>7 Mbps</b>. Z es la suma de todo lo que aportan los dispositivos conectados.</div>
+  <div class="callout anim" style="--d:4;margin-top:14px;background:var(--c1);border:2px solid var(--c2);border-left:8px solid var(--c3)"><span class="t">Dato técnico</span>Es un problema de <b>programación lineal</b>: la función objetivo y las restricciones son combinaciones lineales de x e y.</div>
+</section>
+
+<!-- 7. RESTRICCIONES -->
+<section class="slide">
+  <h2 class="anim" style="--d:0">Paso 2: las restricciones (los límites)</h2>
+  <div class="grid2" style="gap:18px">
+    <div class="card anim" style="--d:1"><h3>Airtime del Canal 1</h3><div class="formula" style="font-size:26px;padding:8px">5x ≤ 40 → x ≤ 8</div><p style="margin-top:8px;font-size:19px">Cada dispositivo gasta 5 % y solo hay 40 % libre: caben como máximo 40 ÷ 5 = <b>8</b>.</p></div>
+    <div class="card anim" style="--d:2"><h3>Airtime del Canal 11</h3><div class="formula" style="font-size:26px;padding:8px">4y ≤ 48 → y ≤ 12</div><p style="margin-top:8px;font-size:19px">Cada dispositivo gasta 4 % y hay 48 % libre: caben como máximo 48 ÷ 4 = <b>12</b>.</p></div>
+    <div class="card anim" style="--d:3"><h3>Clientes del router</h3><div class="formula" style="font-size:26px;padding:8px">x + y ≤ 15</div><p style="margin-top:8px;font-size:19px">El router solo soporta <b>15 clientes</b> a la vez entre ambos canales.</p></div>
+    <div class="card anim" style="--d:4"><h3>No negatividad</h3><div class="formula" style="font-size:26px;padding:8px">x ≥ 0 , y ≥ 0</div><p style="margin-top:8px;font-size:19px">No existen cantidades negativas de dispositivos.</p></div>
+  </div>
+  <div class="callout anim" style="--d:5;margin-top:18px;font-size:19px"><span class="t">Modelo completo</span><span class="mono">Max Z = 4x + 7y &nbsp; sujeto a: &nbsp; 5x ≤ 40 ; 4y ≤ 48 ; x + y ≤ 15 ; x, y ≥ 0</span></div>
+</section>
+
+<!-- 8. PASOS DEL MÉTODO -->
+<section class="slide">
+  <h2 class="anim" style="--d:0">Método gráfico: la receta en 5 pasos</h2>
+  <div class="grid5">
+    <div class="card anim" style="--d:1"><div class="num-circle">1</div><h3 style="font-size:20px">Dibujar</h3><p style="font-size:18px">Cada restricción se grafica como una recta.</p></div>
+    <div class="card anim" style="--d:2"><div class="num-circle">2</div><h3 style="font-size:20px">Sombrear</h3><p style="font-size:18px">Se marca la región donde se cumplen <b>todas</b> a la vez: la región factible.</p></div>
+    <div class="card anim" style="--d:3"><div class="num-circle">3</div><h3 style="font-size:20px">Vértices</h3><p style="font-size:18px">Se encuentran las esquinas de esa región.</p></div>
+    <div class="card anim" style="--d:4"><div class="num-circle">4</div><h3 style="font-size:20px">Evaluar</h3><p style="font-size:18px">Se calcula Z en cada vértice.</p></div>
+    <div class="card anim" style="--d:5"><div class="num-circle">5</div><h3 style="font-size:20px">Elegir</h3><p style="font-size:18px">Se escoge el vértice con el <b>mayor Z</b>.</p></div>
+  </div>
+  <div class="callout anim" style="--d:6;margin-top:30px"><span class="t">¿Por qué solo las esquinas?</span>En un problema lineal, el valor máximo de Z <b>siempre aparece en una esquina</b> (vértice) de la región factible. Por eso basta con comparar unos pocos puntos en lugar de probar infinitas combinaciones.</div>
+  <div class="card anim" style="--d:7;margin-top:18px"><p><b>Región factible</b> = todas las combinaciones de dispositivos (x, y) que el router y los canales pueden soportar sin romper ningún límite.</p></div>
+</section>
+
+<!-- 9. GRÁFICA NOCHE -->
+<section class="slide">
+  <h2 class="anim" style="--d:0">Paso 3: gráfica de la región factible (noche)</h2>
+  <div style="display:grid;grid-template-columns:690px 1fr;gap:22px;align-items:start">
+    <div class="chartbox anim" style="--d:1"><div id="chart-noche"></div></div>
+    <div>
+      <div class="card legend anim" style="--d:2;padding:16px 20px">
+        <h3 style="font-size:21px">Cómo leer la gráfica</h3>
+        <div><svg width="46" height="14"><line x1="0" y1="7" x2="46" y2="7" stroke="#2A2F63" stroke-width="4"/></svg><span><b>5x ≤ 40</b> Canal 1 (x ≤ 8)</span></div>
+        <div><svg width="46" height="14"><line x1="0" y1="7" x2="46" y2="7" stroke="#5FB0C9" stroke-width="5"/></svg><span><b>4y ≤ 48</b> Canal 11 (y ≤ 12)</span></div>
+        <div><svg width="46" height="14"><line x1="0" y1="7" x2="46" y2="7" stroke="#3E6D9C" stroke-width="4" stroke-dasharray="8 5"/></svg><span><b>x + y ≤ 15</b> clientes del router</span></div>
+        <div><svg width="46" height="18"><rect x="0" y="2" width="46" height="14" rx="3" fill="#A7E0DB" stroke="#3E6D9C"/></svg><span><b>Zona verde-agua:</b> región factible</span></div>
+        <div><svg width="46" height="22"><polygon points="23,1 28,15 43,15 31,24 35,38 23,29 11,38 15,24 3,15 18,15" transform="scale(.6) translate(15,-2)" fill="#2A2F63"/></svg><span><b>Estrella:</b> solución óptima</span></div>
+      </div>
+      <div class="callout anim" style="--d:3;margin-top:14px;font-size:19px"><span class="t">En palabras simples</span>Cualquier punto dentro de la zona es una combinación permitida. Los puntos oscuros son las esquinas que vamos a evaluar.</div>
+    </div>
+  </div>
+</section>
+
+<!-- 10. VÉRTICES -->
+<section class="slide">
+  <h2 class="anim" style="--d:0">Paso 4: los vértices y su verificación</h2>
+  <div class="anim" style="--d:1">
+  <table style="font-size:18px">
+    <tr><th class="c">#</th><th class="c">Vértice (x, y)</th><th>¿De dónde sale?</th><th>Verificación</th></tr>
+    <tr><td class="c">1</td><td class="c mono"><b>(0, 0)</b></td><td>Origen: no se conecta ningún dispositivo</td><td>Cumple todos los límites</td></tr>
+    <tr><td class="c">2</td><td class="c mono"><b>(8, 0)</b></td><td>x = 8 con y = 0 (tope del Canal 1)</td><td class="mono">5(8) = 40 ≤ 40 <span class="ok">✔</span></td></tr>
+    <tr><td class="c">3</td><td class="c mono"><b>(0, 12)</b></td><td>y = 12 con x = 0 (tope del Canal 11)</td><td class="mono">4(12) = 48 ≤ 48 <span class="ok">✔</span></td></tr>
+    <tr><td class="c">4</td><td class="c mono"><b>(8, 7)</b></td><td>x = 8 con x + y = 15 → y = 15 − 8 = 7</td><td class="mono">40 ≤ 40 ✔ · 28 ≤ 48 ✔ · 15 ≤ 15 ✔</td></tr>
+    <tr><td class="c">5</td><td class="c mono"><b>(3, 12)</b></td><td>y = 12 con x + y = 15 → x = 15 − 12 = 3</td><td class="mono">15 ≤ 40 ✔ · 48 ≤ 48 ✔ · 15 ≤ 15 ✔</td></tr>
+  </table>
+  </div>
+  <div class="callout anim" style="--d:2;margin-top:22px"><span class="t">Cómo se calculan</span>Un vértice es el punto donde <b>se cruzan dos rectas</b>. Se resuelve el sistema de esas dos ecuaciones y luego se comprueba que el punto cumpla <b>todas</b> las restricciones.</div>
+</section>
+
+<!-- 11. EVALUACIÓN DE Z -->
+<section class="slide">
+  <h2 class="anim" style="--d:0">Paso 5: evaluar Z = 4x + 7y en cada vértice</h2>
+  <div class="anim" style="--d:1">
+  <table style="font-size:19px">
+    <tr><th class="c">Vértice</th><th>Cálculo</th><th class="c">Z (Mbps)</th><th style="width:300px">Comparación</th></tr>
+    <tr><td class="c mono">(0, 0)</td><td class="mono">4(0) + 7(0)</td><td class="c"><b>0</b></td><td><div class="bar"><i style="width:0%"></i></div></td></tr>
+    <tr><td class="c mono">(8, 0)</td><td class="mono">4(8) + 7(0)</td><td class="c"><b>32</b></td><td><div class="bar"><i style="width:33.3%"></i></div></td></tr>
+    <tr><td class="c mono">(0, 12)</td><td class="mono">4(0) + 7(12)</td><td class="c"><b>84</b></td><td><div class="bar"><i style="width:87.5%"></i></div></td></tr>
+    <tr><td class="c mono">(8, 7)</td><td class="mono">4(8) + 7(7) = 32 + 49</td><td class="c"><b>81</b></td><td><div class="bar"><i style="width:84.4%"></i></div></td></tr>
+    <tr class="best"><td class="c mono">(3, 12) ★</td><td class="mono">4(3) + 7(12) = 12 + 84</td><td class="c"><b>96</b></td><td><div class="bar"><i style="width:100%"></i></div></td></tr>
+  </table>
+  </div>
+  <div class="callout anim" style="--d:2;margin-top:22px"><span class="t">Resultado</span>El mayor valor es <b>Z = 96 Mbps</b> y ocurre en el vértice <b>(3, 12)</b>. Esa es la solución óptima de la franja de noche.</div>
+</section>
+
+<!-- 12. SOLUCIÓN NOCHE -->
+<section class="slide">
+  <h2 class="anim" style="--d:0">Solución de la noche: el Canal 11 gana</h2>
+  <div class="grid3" style="margin-bottom:22px">
+    <div class="card anim" style="--d:1;text-align:center"><div class="big">3<small> disp.</small></div><p>en el <b>Canal 1</b></p></div>
+    <div class="card anim" style="--d:2;text-align:center"><div class="big">12<small> disp.</small></div><p>en el <b>Canal 11</b></p></div>
+    <div class="card dark anim" style="--d:3;text-align:center"><div class="big" style="color:var(--c2)">96<small style="color:var(--c1)"> Mbps</small></div><p>throughput <b>total máximo</b></p></div>
+  </div>
+  <div class="grid2">
+    <div class="card anim" style="--d:4">
+      <h3>Uso de los recursos</h3>
+      <div class="use"><div class="lab"><span>Airtime Canal 1</span><span><b>15 de 40</b> (37.5 %)</span></div><div class="bar"><i style="width:37.5%"></i></div></div>
+      <div class="use"><div class="lab"><span>Airtime Canal 11</span><span><b>48 de 48</b> (100 %)</span></div><div class="bar"><i style="width:100%"></i></div></div>
+      <div class="use"><div class="lab"><span>Clientes del router</span><span><b>15 de 15</b> (100 %)</span></div><div class="bar"><i style="width:100%"></i></div></div>
+    </div>
+    <div class="callout anim" style="--d:5;align-self:start"><span class="t">Interpretación</span>El Canal 11 rinde más por dispositivo (7 Mbps frente a 4 Mbps), así que se llena primero. Al agotarse su airtime y el límite de 15 clientes, los 3 restantes van al Canal 1. Sobra airtime en el Canal 1, pero ya no se pueden conectar más clientes.</div>
+  </div>
+</section>
+
+<!-- 13. MAÑANA: DATOS Y MODELO -->
+<section class="slide">
+  <h2 class="anim" style="--d:0">Segunda franja: mañana (07:00 – 12:00)</h2>
+  <div class="grid2" style="grid-template-columns:1.15fr 1fr">
+    <div class="anim" style="--d:1">
+      <table style="font-size:18px">
+        <tr><th>Recurso / restricción</th><th class="c">Canal 1</th><th class="c">Canal 11</th><th class="c">Disp.</th></tr>
+        <tr><td>Airtime Canal 1 (%)</td><td class="c">5</td><td class="c">–</td><td class="c">60</td></tr>
+        <tr><td>Airtime Canal 11 (%)</td><td class="c">–</td><td class="c">4</td><td class="c">24</td></tr>
+        <tr><td>Clientes del router</td><td class="c">1</td><td class="c">1</td><td class="c">15</td></tr>
+        <tr class="best"><td><b>Throughput (Mbps)</b></td><td class="c"><b>6</b></td><td class="c"><b>3</b></td><td class="c">—</td></tr>
+      </table>
+    </div>
+    <div class="card anim" style="--d:2">
+      <h3>Modelo de la mañana</h3>
+      <div class="formula" style="font-size:25px;padding:10px">Max Z = 6x + 3y</div>
+      <p class="mono" style="margin-top:10px;font-size:20px">5x ≤ 60 → x ≤ 12<br>4y ≤ 24 → y ≤ 6<br>x + y ≤ 15<br>x, y ≥ 0</p>
+    </div>
+  </div>
+  <div class="callout anim" style="--d:3;margin-top:24px"><span class="t">Qué cambió</span>Ahora el <b>Canal 1 está libre</b> (60 % de airtime) y el <b>Canal 11 está ocupado</b> (24 %). Cambian los números, pero <b>el método es exactamente el mismo</b>.</div>
+</section>
+
+<!-- 14. MAÑANA: GRÁFICA + Z -->
+<section class="slide">
+  <h2 class="anim" style="--d:0">Región factible y evaluación de Z (mañana)</h2>
+  <div style="display:grid;grid-template-columns:640px 1fr;gap:20px;align-items:start">
+    <div class="chartbox anim" style="--d:1"><div id="chart-manana"></div></div>
+    <div class="anim" style="--d:2">
+      <table style="font-size:17px">
+        <tr><th class="c">Vértice</th><th>Z = 6x + 3y</th><th class="c">Z</th></tr>
+        <tr><td class="c mono">(0, 0)</td><td class="mono">0 + 0</td><td class="c"><b>0</b></td></tr>
+        <tr><td class="c mono">(12, 0)</td><td class="mono">6(12) + 3(0)</td><td class="c"><b>72</b></td></tr>
+        <tr><td class="c mono">(0, 6)</td><td class="mono">6(0) + 3(6)</td><td class="c"><b>18</b></td></tr>
+        <tr><td class="c mono">(9, 6)</td><td class="mono">54 + 18</td><td class="c"><b>72</b></td></tr>
+        <tr class="best"><td class="c mono">(12, 3) ★</td><td class="mono">72 + 9</td><td class="c"><b>81</b></td></tr>
+      </table>
+      <div class="callout" style="margin-top:12px;font-size:17px;padding:10px 16px"><span class="t">Vértices nuevos</span>(12, 3): x = 12 con x + y = 15 → y = 3.<br>(9, 6): y = 6 con x + y = 15 → x = 9.</div>
+    </div>
+  </div>
+</section>
+
+<!-- 15. SOLUCIÓN MAÑANA -->
+<section class="slide">
+  <h2 class="anim" style="--d:0">Solución de la mañana: el Canal 1 gana</h2>
+  <div class="grid3" style="margin-bottom:22px">
+    <div class="card anim" style="--d:1;text-align:center"><div class="big">12<small> disp.</small></div><p>en el <b>Canal 1</b></p></div>
+    <div class="card anim" style="--d:2;text-align:center"><div class="big">3<small> disp.</small></div><p>en el <b>Canal 11</b></p></div>
+    <div class="card dark anim" style="--d:3;text-align:center"><div class="big" style="color:var(--c2)">81<small style="color:var(--c1)"> Mbps</small></div><p>throughput <b>total máximo</b></p></div>
+  </div>
+  <div class="grid2">
+    <div class="card anim" style="--d:4">
+      <h3>Uso de los recursos</h3>
+      <div class="use"><div class="lab"><span>Airtime Canal 1</span><span><b>60 de 60</b> (100 %)</span></div><div class="bar"><i style="width:100%"></i></div></div>
+      <div class="use"><div class="lab"><span>Airtime Canal 11</span><span><b>12 de 24</b> (50 %)</span></div><div class="bar"><i style="width:50%"></i></div></div>
+      <div class="use"><div class="lab"><span>Clientes del router</span><span><b>15 de 15</b> (100 %)</span></div><div class="bar"><i style="width:100%"></i></div></div>
+    </div>
+    <div class="callout anim" style="--d:5;align-self:start"><span class="t">Interpretación</span>La situación se invierte: ahora el Canal 1 rinde más (6 Mbps frente a 3 Mbps) y está libre, así que se llena primero con 12 dispositivos. Los 3 restantes van al Canal 11.</div>
+  </div>
+</section>
+
+<!-- 16. COMPARACIÓN -->
+<section class="slide">
+  <h2 class="anim" style="--d:0">Conclusión: el mejor canal depende de la hora</h2>
+  <div class="anim" style="--d:1">
+  <table>
+    <tr><th>Franja</th><th class="c">Mejor canal</th><th class="c">Asignación óptima (x, y)</th><th class="c">Throughput máx.</th></tr>
+    <tr><td>🌙 Noche (19 – 23 h)</td><td class="c"><b>Canal 11</b></td><td class="c mono">(3, 12)</td><td class="c"><b>96 Mbps</b></td></tr>
+    <tr><td>☀️ Mañana (7 – 12 h)</td><td class="c"><b>Canal 1</b></td><td class="c mono">(12, 3)</td><td class="c"><b>81 Mbps</b></td></tr>
+  </table>
+  </div>
+  <div class="grid2" style="margin-top:24px">
+    <div class="card dark anim" style="--d:2"><h3>Mensaje central</h3><p>El canal óptimo <b>no es fijo</b>: cambia con la ocupación a lo largo del día.</p></div>
+    <div class="card anim" style="--d:3"><h3>Qué ganamos</h3><p>Un router que reasigna dispositivos por franja horaria <b>rinde más</b> que uno con un canal fijo todo el día.</p></div>
+  </div>
+  <div class="callout anim" style="--d:4;margin-top:22px"><span class="t">Regla práctica</span>Se llena primero el canal que da <b>más Mbps por dispositivo</b> y tiene airtime libre; el resto de dispositivos se acomoda en el otro canal.</div>
+</section>
+
+<!-- 17. SUPUESTOS Y APLICACIONES -->
+<section class="slide">
+  <h2 class="anim" style="--d:0">Supuestos, aplicaciones y mejoras</h2>
+  <div class="grid3">
+    <div class="card anim" style="--d:1"><h3>Supuestos</h3>
+      <ul style="margin-left:20px;font-size:19px"><li>Datos didácticos, no mediciones reales.</li><li>El consumo de airtime es proporcional al número de dispositivos.</li><li>El throughput por dispositivo es constante.</li><li>Solo se consideran 2 canales.</li></ul></div>
+    <div class="card dark anim" style="--d:2"><h3>Aplicaciones reales</h3>
+      <ul style="margin-left:20px;font-size:19px"><li>Selección automática de canal en routers.</li><li>Balanceo de carga entre puntos de acceso.</li><li>Distribución entre bandas 2.4 y 5 GHz.</li><li>Planificación de redes en edificios.</li></ul></div>
+    <div class="card anim" style="--d:3"><h3>Cómo mejorarlo</h3>
+      <ul style="margin-left:20px;font-size:19px"><li>Medir la ocupación real con un analizador Wi-Fi.</li><li>Agregar el Canal 6 y la banda de 5 GHz.</li><li>Con 3 o más variables se usa el método simplex.</li></ul></div>
+  </div>
+  <div class="callout anim" style="--d:4;margin-top:28px"><span class="t">Idea final</span>La programación lineal convierte una decisión cotidiana de redes en un problema que se puede <b>calcular, comprobar y justificar</b>.</div>
+</section>
+
+<!-- 18. CIERRE -->
+<section class="slide cover" style="display:flex;flex-direction:column;justify-content:center">
+  <span class="tag anim" style="--d:0;align-self:flex-start">Gracias por su atención</span>
+  <h1 class="anim" style="--d:1;font-size:72px">¿Preguntas?</h1>
+  <p class="sub anim" style="--d:2">Asignación óptima de dispositivos entre canales Wi-Fi · Programación lineal, método gráfico.</p>
+  <div class="info anim" style="--d:3">
+    <p><b>Miguel Roberth Díaz Zambrano</b></p>
+    <p>Universidad Técnica Estatal de Quevedo · Facultad de Ciencias de la Computación</p>
+    <p>Telemática · Séptimo semestre · Investigación de Operaciones</p>
+  </div>
+</section>
+
+</div><!-- /track -->
+</div><!-- /stage -->
+</div><!-- /viewport -->
+
+<!-- Controles -->
+<button class="ui" id="pdfBtn" title="Exportar todas las diapositivas a PDF">⬇ Exportar PDF</button>
+<button class="ui arrow" id="prev" aria-label="Diapositiva anterior">❮</button>
+<button class="ui arrow" id="next" aria-label="Diapositiva siguiente">❯</button>
+<div class="ui" id="dots"></div>
+<div class="ui" id="toast"></div>
+
+<script>
+/* ---------- Gráficas SVG ---------- */
+function starPts(cx,cy,R,r){var p=[];for(var i=0;i<10;i++){var a=-Math.PI/2+i*Math.PI/5,rad=i%2?r:R;p.push((cx+rad*Math.cos(a)).toFixed(1)+","+(cy+rad*Math.sin(a)).toFixed(1));}return p.join(" ");}
+
+function drawChart(id,c){
+  var W=680,H=505,ml=64,mr=24,mt=24,mb=58,pw=W-ml-mr,ph=H-mt-mb;
+  function sx(x){return ml+x/c.xmax*pw;} function sy(y){return H-mb-y/c.ymax*ph;}
+  var s='<svg viewBox="0 0 '+W+' '+H+'" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="'+c.alt+'" font-family="Segoe UI,Roboto,Arial,sans-serif">';
+  s+='<defs><clipPath id="clip-'+id+'"><rect x="'+ml+'" y="'+mt+'" width="'+pw+'" height="'+ph+'"/></clipPath></defs>';
+  s+='<rect x="'+ml+'" y="'+mt+'" width="'+pw+'" height="'+ph+'" fill="#ffffff"/>';
+  var i;
+  for(i=0;i<=c.xmax;i+=2){s+='<line x1="'+sx(i)+'" y1="'+mt+'" x2="'+sx(i)+'" y2="'+(H-mb)+'" stroke="#A7E0DB" stroke-width="1" opacity=".7"/>';s+='<text x="'+sx(i)+'" y="'+(H-mb+22)+'" text-anchor="middle" font-size="15" fill="#2A2F63">'+i+'</text>';}
+  for(i=0;i<=c.ymax;i+=2){s+='<line x1="'+ml+'" y1="'+sy(i)+'" x2="'+(W-mr)+'" y2="'+sy(i)+'" stroke="#A7E0DB" stroke-width="1" opacity=".7"/>';s+='<text x="'+(ml-10)+'" y="'+(sy(i)+5)+'" text-anchor="end" font-size="15" fill="#2A2F63">'+i+'</text>';}
+  var poly=c.poly.map(function(p){return sx(p[0]).toFixed(1)+","+sy(p[1]).toFixed(1);}).join(" ");
+  s+='<polygon points="'+poly+'" fill="#A7E0DB" fill-opacity=".75" stroke="#3E6D9C" stroke-width="1.5"/>';
+  s+='<g clip-path="url(#clip-'+id+')">';
+  c.lines.forEach(function(l){
+    var dash=l.dash?' stroke-dasharray="10 7"':'';
+    s+='<line x1="'+sx(l.a[0]).toFixed(1)+'" y1="'+sy(l.a[1]).toFixed(1)+'" x2="'+sx(l.b[0]).toFixed(1)+'" y2="'+sy(l.b[1]).toFixed(1)+'" stroke="'+l.color+'" stroke-width="'+l.w+'"'+dash+' stroke-linecap="round"/>';
+  });
+  s+='</g>';
+  s+='<rect x="'+ml+'" y="'+mt+'" width="'+pw+'" height="'+ph+'" fill="none" stroke="#2A2F63" stroke-width="2"/>';
+  c.lines.forEach(function(l){
+    s+='<text x="'+sx(l.lx).toFixed(1)+'" y="'+sy(l.ly).toFixed(1)+'" text-anchor="'+(l.anchor||'start')+'" font-size="16" font-weight="700" fill="'+l.tc+'" stroke="#ffffff" stroke-width="4" paint-order="stroke">'+l.label+'</text>';
+  });
+  c.verts.forEach(function(v){
+    var x=sx(v.p[0]),y=sy(v.p[1]);
+    if(!v.opt) s+='<circle cx="'+x+'" cy="'+y+'" r="6.5" fill="#2A2F63" stroke="#fff" stroke-width="2"/>';
+    var tx=x+v.dx,ty=y+v.dy,an=v.anchor||'start';
+    s+='<text text-anchor="'+an+'" font-size="15" font-weight="700" fill="#2A2F63" stroke="#ffffff" stroke-width="4" paint-order="stroke"><tspan x="'+tx+'" y="'+ty+'">'+v.t1+'</tspan><tspan x="'+tx+'" dy="17">'+v.t2+'</tspan></text>';
+  });
+  s+='<polygon points="'+starPts(sx(c.opt[0]),sy(c.opt[1]),17,7.5)+'" fill="#2A2F63" stroke="#A7E0DB" stroke-width="2.5"/>';
+  s+='<text x="'+(ml+pw/2)+'" y="'+(H-12)+'" text-anchor="middle" font-size="17" font-weight="700" fill="#2A2F63">x = dispositivos en Canal 1</text>';
+  s+='<text transform="translate(18 '+(mt+ph/2)+') rotate(-90)" text-anchor="middle" font-size="17" font-weight="700" fill="#2A2F63">y = dispositivos en Canal 11</text>';
+  s+='</svg>';
+  document.getElementById(id).innerHTML=s;
+}
+
+drawChart('chart-noche',{
+  alt:'Región factible de la franja de noche con vértices (0,0), (8,0), (8,7), (3,12) y (0,12). El óptimo es (3,12) con Z igual a 96.',
+  xmax:16,ymax:16,opt:[3,12],
+  poly:[[0,0],[8,0],[8,7],[3,12],[0,12]],
+  lines:[
+    {a:[8,0],b:[8,16],color:'#2A2F63',w:4,label:'5x ≤ 40',lx:8.15,ly:15.2,tc:'#2A2F63'},
+    {a:[0,12],b:[16,12],color:'#5FB0C9',w:5,label:'4y ≤ 48',lx:15.8,ly:12.45,anchor:'end',tc:'#3E6D9C'},
+    {a:[0,15],b:[15,0],color:'#3E6D9C',w:4,dash:true,label:'x + y ≤ 15',lx:10.3,ly:5.9,tc:'#3E6D9C'}
+  ],
+  verts:[
+    {p:[0,0],t1:'(0, 0)',t2:'Z = 0',dx:10,dy:-34},
+    {p:[8,0],t1:'(8, 0)',t2:'Z = 32',dx:10,dy:-34},
+    {p:[0,12],t1:'(0, 12)',t2:'Z = 84',dx:10,dy:24},
+    {p:[8,7],t1:'(8, 7)',t2:'Z = 81',dx:14,dy:-12},
+    {p:[3,12],t1:'(3, 12) ÓPTIMO',t2:'Z = 96',dx:22,dy:-36,opt:true}
+  ]
+});
+
+drawChart('chart-manana',{
+  alt:'Región factible de la franja de mañana con vértices (0,0), (12,0), (12,3), (9,6) y (0,6). El óptimo es (12,3) con Z igual a 81.',
+  xmax:16,ymax:14,opt:[12,3],
+  poly:[[0,0],[12,0],[12,3],[9,6],[0,6]],
+  lines:[
+    {a:[12,0],b:[12,14],color:'#2A2F63',w:4,label:'5x ≤ 60',lx:12.2,ly:13.2,tc:'#2A2F63'},
+    {a:[0,6],b:[16,6],color:'#5FB0C9',w:5,label:'4y ≤ 24',lx:15.8,ly:6.45,anchor:'end',tc:'#3E6D9C'},
+    {a:[0,15],b:[15,0],color:'#3E6D9C',w:4,dash:true,label:'x + y ≤ 15',lx:4.4,ly:10.9,tc:'#3E6D9C'}
+  ],
+  verts:[
+    {p:[0,0],t1:'(0, 0)',t2:'Z = 0',dx:10,dy:-34},
+    {p:[12,0],t1:'(12, 0)',t2:'Z = 72',dx:-10,dy:-34,anchor:'end'},
+    {p:[0,6],t1:'(0, 6)',t2:'Z = 18',dx:10,dy:-34},
+    {p:[9,6],t1:'(9, 6)',t2:'Z = 72',dx:12,dy:-30},
+    {p:[12,3],t1:'(12, 3) ÓPTIMO',t2:'Z = 81',dx:22,dy:-30,opt:true}
+  ]
+});
+
+/* ---------- Carrusel ---------- */
+var stage=document.getElementById('stage'),track=document.getElementById('track'),
+    slides=[].slice.call(document.querySelectorAll('.slide')),N=slides.length,cur=0,
+    prev=document.getElementById('prev'),next=document.getElementById('next'),dots=document.getElementById('dots');
+
+slides.forEach(function(sl,i){
+  var f=document.createElement('footer');f.className='foot';
+  f.innerHTML='<span class="who">Miguel Roberth Díaz Zambrano</span><span class="uni">Universidad Técnica Estatal de Quevedo · Telemática · 7.º semestre</span><span class="n">'+(i+1)+' / '+N+'</span>';
+  sl.appendChild(f);
+  var b=document.createElement('button');b.setAttribute('aria-label','Ir a la diapositiva '+(i+1));
+  b.onclick=function(){go(i);};dots.appendChild(b);
+});
+
+function fit(){var k=Math.min(window.innerWidth/1280,window.innerHeight/720);stage.style.transform='translate(-50%,-50%) scale('+k+')';}
+function go(n){
+  cur=Math.max(0,Math.min(N-1,n));
+  track.style.transform='translateX('+(-cur*1280)+'px)';
+  slides.forEach(function(s,i){s.classList.toggle('active',i===cur);});
+  [].forEach.call(dots.children,function(d,i){d.classList.toggle('on',i===cur);});
+  prev.disabled=cur===0;next.disabled=cur===N-1;
+  try{history.replaceState(null,'','#'+(cur+1));}catch(e){}
+}
+prev.onclick=function(){go(cur-1);};next.onclick=function(){go(cur+1);};
+document.addEventListener('keydown',function(e){
+  if(e.key==='ArrowRight'||e.key==='PageDown'||e.key===' '){e.preventDefault();go(cur+1);}
+  else if(e.key==='ArrowLeft'||e.key==='PageUp'){e.preventDefault();go(cur-1);}
+  else if(e.key==='Home'){go(0);} else if(e.key==='End'){go(N-1);}
+});
+var tx0=null;
+document.addEventListener('touchstart',function(e){tx0=e.touches[0].clientX;},{passive:true});
+document.addEventListener('touchend',function(e){if(tx0===null)return;var d=e.changedTouches[0].clientX-tx0;if(Math.abs(d)>50)go(cur+(d<0?1:-1));tx0=null;},{passive:true});
+window.addEventListener('resize',fit);
+fit();
+var h=parseInt((location.hash||'').slice(1),10);
+track.style.transition='none';go(isNaN(h)?0:h-1);
+requestAnimationFrame(function(){requestAnimationFrame(function(){track.style.transition='';});});
+
+/* ---------- Exportar a PDF ---------- */
+var toast=document.getElementById('toast');
+document.getElementById('pdfBtn').onclick=function(){
+  toast.textContent='En el cuadro de impresión elige «Guardar como PDF» (destino) y deja los márgenes en «Ninguno». Se exportarán las '+N+' diapositivas.';
+  toast.classList.add('show');
+  var old=document.title;document.title='Asignacion_optima_canales_WiFi_Miguel_Diaz';
+  setTimeout(function(){window.print();document.title=old;setTimeout(function(){toast.classList.remove('show');},1500);},700);
+};
+window.addEventListener('afterprint',function(){go(cur);});
+</script>
+</body>
+</html>
